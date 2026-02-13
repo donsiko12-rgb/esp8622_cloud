@@ -78,9 +78,9 @@ function checkAlerts(level) {
 // --- API Endpoints ---
 
 // POST /api/update - Receive data from ESP8266
-// Expects: { distance: float, level: float, rssi: int }
+// Expects: { distance: float, level: float, rssi: int, status: string (optional) }
 app.post('/api/update', (req, res) => {
-    const { distance, level, rssi } = req.body;
+    const { distance, level, rssi, status } = req.body;
 
     if (distance === undefined || level === undefined) {
         return res.status(400).json({ error: 'Missing data' });
@@ -106,9 +106,20 @@ app.post('/api/update', (req, res) => {
         history.shift(); // Remove oldest
     }
 
-    console.log(`[${currentStatus.time}] Data received: Level ${level}%, RSSI ${rssi}`);
+    console.log(`[${currentStatus.time}] Data received: Level ${level}%, RSSI ${rssi}, Status: ${status || 'normal'}`);
 
-    // Check for alerts
+    // Handle System Status Notifications (Boot / Wake)
+    if (status === 'boot') {
+        const msg = `🟢 **System Online**\nWater Monitor is back online.\nCurrent Level: ${level}%`;
+        bot.sendMessage(config.telegram.chatId, msg, { parse_mode: 'Markdown' });
+        console.log("Sent 'System Online' notification");
+    } else if (status === 'wake') {
+        const msg = `☀️ **Good Morning!**\nExiting Night Mode.\nCurrent Level: ${level}%`;
+        bot.sendMessage(config.telegram.chatId, msg, { parse_mode: 'Markdown' });
+        console.log("Sent 'Wake Up' notification");
+    }
+
+    // Check for alerts (only for normal/wake updates, boot might trigger immediate alert too which is fine)
     checkAlerts(currentStatus.level);
 
     res.json({ success: true });
