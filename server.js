@@ -2,6 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const TelegramBot = require('node-telegram-bot-api');
+const config = require('./config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +25,55 @@ let currentStatus = {
 // History storage (keep last 100 points)
 let history = [];
 const MAX_HISTORY = 100;
+
+// --- Telegram Notification Logic ---
+const bot = new TelegramBot(config.telegram.token, {
+    polling: false,
+    request: {
+        family: 4 // Force IPv4 to avoid ETIMEDOUT on some networks (like Render?)
+    }
+});
+
+let lastAlertTime = 0;
+let lastAlertType = null; // 'low' or 'high'
+
+function checkAlerts(level) {
+    const now = Date.now();
+    let alertType = null;
+    let message = null;
+
+    if (level < config.alerts.low) {
+        alertType = 'low';
+        message = `⚠️ **CRITICAL: Low Water Level!**\nCurrent Level: ${level}%`;
+    } else if (level > config.alerts.high) {
+        alertType = 'high';
+        message = `✅ **Tank Full!**\nCurrent Level: ${level}%`;
+    }
+
+    if (alertType) {
+        // Send if:
+        // 1. Different alert type than last time (e.g., went from low to high)
+        // 2. OR enough time has passed since last alert of THIS type
+        if (alertType !== lastAlertType || (now - lastAlertTime > config.alerts.cooldown)) {
+
+            console.log(`Sending Telegram message to ${config.telegram.chatId}...`);
+            bot.sendMessage(config.telegram.chatId, message, { parse_mode: 'Markdown' })
+                .then(() => {
+                    console.log(`Telegram alert sent: ${alertType}`);
+                    lastAlertTime = now;
+                    lastAlertType = alertType;
+                })
+                .catch((error) => {
+                    console.error('Telegram Send Error:', error.message);
+                });
+        }
+    } else {
+        // Reset alert type if back to normal range, so next alert sends immediately
+        if (lastAlertType !== null && level >= config.alerts.low && level <= config.alerts.high) {
+            lastAlertType = null;
+        }
+    }
+}
 
 // --- API Endpoints ---
 
@@ -63,51 +114,24 @@ app.post('/api/update', (req, res) => {
     res.json({ success: true });
 });
 
-// --- Telegram Notification Logic ---
-const TelegramBot = require('node-telegram-bot-api');
-const config = require('./config');
-
-const bot = new TelegramBot(config.telegram.token, { polling: false });
-
-let lastAlertTime = 0;
-let lastAlertType = null; // 'low' or 'high'
-
-function checkAlerts(level) {
-    const now = Date.now();
-    let alertType = null;
-    let message = null;
-
-    if (level < config.alerts.low) {
-        alertType = 'low';
-        message = `⚠️ **CRITICAL: Low Water Level!**\nCurrent Level: ${level}%`;
-    } else if (level > config.alerts.high) {
-        alertType = 'high';
-        message = `✅ **Tank Full!**\nCurrent Level: ${level}%`;
+// GET /api/debug-telegram - Manual test endpoint to see errors directly
+app.get('/api/debug-telegram', async (req, res) => {
+    try {
+        const msg = `🔔 Test Notification from Server\nTime: ${new Date().toLocaleTimeString()}`;
+        console.log("Attempting to send debug message...");
+        const sent = await bot.sendMessage(config.telegram.chatId, msg);
+        console.log("Debug message sent successfully");
+        res.json({ success: true, result: sent });
+    } catch (error) {
+        console.error("Debug message failed:", error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            code: error.code || 'UNKNOWN',
+            details: error.response ? error.response.body : null
+        });
     }
-
-    if (alertType) {
-        // Send if:
-        // 1. Different alert type than last time (e.g., went from low to high)
-        // 2. OR enough time has passed since last alert of THIS type
-        if (alertType !== lastAlertType || (now - lastAlertTime > config.alerts.cooldown)) {
-
-            bot.sendMessage(config.telegram.chatId, message, { parse_mode: 'Markdown' })
-                .then(() => {
-                    console.log(`Telegram alert sent: ${alertType}`);
-                    lastAlertTime = now;
-                    lastAlertType = alertType;
-                })
-                .catch((error) => {
-                    console.error('Telegram Send Error:', error);
-                });
-        }
-    } else {
-        // Reset alert type if back to normal range, so next alert sends immediately
-        if (lastAlertType !== null && level >= config.alerts.low && level <= config.alerts.high) {
-            lastAlertType = null;
-        }
-    }
-}
+});
 
 // GET /api/status - Used by Frontend for real-time display
 app.get('/api/status', (req, res) => {
