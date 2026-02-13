@@ -1,7 +1,7 @@
 module.exports = {
     telegram: {
         token: '8305361977:AAHXyMZKbqMdGjB8Xtg-Rz44oH6SodumUcQ',
-        chatId: '286692210'
+        chatId: '6239622054'
     },
     alerts: {
         low: 10,  // Alert if level < 10%
