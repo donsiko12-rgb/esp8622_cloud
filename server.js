@@ -152,4 +152,5 @@ app.get('/api/history', (req, res) => {
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log("VERSION: 2.1 - Telegram Debug Enabled");
 });
