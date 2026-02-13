@@ -77,6 +77,29 @@ function checkAlerts(level) {
 
 // --- API Endpoints ---
 
+// Helper for Mexico City Time
+function getMexicoTime() {
+    return new Date().toLocaleString("es-MX", {
+        timeZone: "America/Mexico_City",
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function getMexicoShortTime() {
+    return new Date().toLocaleTimeString("es-MX", {
+        timeZone: "America/Mexico_City",
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+}
+
 // POST /api/update - Receive data from ESP8266
 // Expects: { distance: float, level: float, rssi: int, status: string (optional) }
 app.post('/api/update', (req, res) => {
@@ -91,13 +114,13 @@ app.post('/api/update', (req, res) => {
         distance: parseFloat(distance),
         level: parseFloat(level),
         rssi: parseInt(rssi) || -100,
-        time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        time: getMexicoTime(), // Now includes Date + Time in MX zone
         lastSeen: Date.now()
     };
 
     // Add to history
     const historyPoint = {
-        t: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        t: getMexicoShortTime(), // Just HH:MM for chart
         v: parseFloat(level)
     };
 
