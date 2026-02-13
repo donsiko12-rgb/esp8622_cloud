@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Level Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1 {
+            margin: 10px 0;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+        }
+
+        .date-time {
+            font-size: 1.1em;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .wifi-signal {
+            display: flex;
+            gap: 3px;
+            align-items: flex-end;
+            height: 20px;
+        }
+
+        .bar {
+            width: 4px;
+            background: #ddd;
+            border-radius: 2px;
+        }
+
+        .bar.active {
+            background: #4CAF50;
+        }
+
+        .bar:nth-child(1) {
+            height: 6px;
+        }
+
+        .bar:nth-child(2) {
+            height: 10px;
+        }
+
+        .bar:nth-child(3) {
+            height: 14px;
+        }
+
+        .bar:nth-child(4) {
+            height: 18px;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .tank-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 350px;
+        }
+
+        .tank-wrapper {
+            position: relative;
+            width: 140px;
+            height: 240px;
+        }
+
+        .tank-body {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid #bbb;
+            border-radius: 10% / 5%;
+            box-shadow: inset 5px 0 10px rgba(0, 0, 0, 0.1), inset -5px 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            z-index: 2;
+        }
+
+        .water {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(to right, #2193b0, #6dd5ed);
+            transition: height 1s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 -5px 10px rgba(0, 0, 0, 0.1);
+            opacity: 0.9;
+        }
+
+        .water::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 0;
+            width: 100%;
+            height: 10px;
+            background: #6dd5ed;
+            border-radius: 50%;
+            opacity: 0.8;
+            transform: scaleX(1);
+        }
+
+        .ruler {
+            position: absolute;
+            height: 100%;
+            right: 5px;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px 0;
+            color: #888;
+            font-size: 0.7em;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .tick {
+            position: relative;
+            text-align: right;
+            width: 15px;
+            border-top: 1px solid #ccc;
+        }
+
+        .stats-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .stat-item {
+            margin-bottom: 20px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-unit {
+            font-size: 0.4em;
+            color: #666;
+        }
+
+        .chart-card {
+            min-height: 300px;
+            padding: 15px;
+        }
+
+        .live-dot {
+            height: 8px;
+            width: 8px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+            margin-right: 5px;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.8;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.8;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Water Monitor</h1>
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="card header-card">
+            <div class="status"><span class="live-dot"></span>Online</div>
+            <div id="dateTime" class="date-time">--:--:--</div>
+            <div class="wifi-signal" id="wifiSignal">
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            <!-- Tank Visual -->
+            <div class="card tank-card">
+                <div class="tank-wrapper">
+                    <div class="tank-body">
+                        <div class="ruler">
+                            <div class="tick">100%</div>
+                            <div class="tick">75%</div>
+                            <div class="tick">50%</div>
+                            <div class="tick">25%</div>
+                            <div class="tick">0%</div>
+                        </div>
+                        <div class="water" id="waterLevel"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="card stats-card">
+                <div class="stat-item">
+                    <div class="stat-label">Level</div>
+                    <div class="stat-value"><span id="percentText">--</span><span class="stat-unit">%</span></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Distance</div>
+                    <div class="stat-value"><span id="distText">--</span><span class="stat-unit">cm</span></div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Capacity</div>
+                    <div class="stat-value">~1000<span class="stat-unit">L</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Chart -->
+        <div class="card chart-card">
+            <canvas id="levelChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // --- Chart Logic ---
+        const ctx = document.getElementById('levelChart').getContext('2d');
+        const levelChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Time labels
+                datasets: [{
+                    label: 'Water Level (%)',
+                    data: [],
+                    borderColor: '#2193b0',
+                    backgroundColor: 'rgba(33, 147, 176, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100 },
+                    x: { ticks: { maxTicksLimit: 6 } }
+                },
+                plugins: { legend: { display: false }, title: { display: true, text: 'Last 24 Hours History' } }
+            }
+        });
+
+        // --- Real-time Logic ---
+        function updateClock(serverTime) { document.getElementById('dateTime').innerText = serverTime || "--:--:--"; }
+
+        function setWifiSignal(rssi) {
+            const bars = document.querySelectorAll('.wifi-signal .bar');
+            bars.forEach(b => b.classList.remove('active'));
+            if (rssi > -90) bars[0].classList.add('active');
+            if (rssi > -80) bars[1].classList.add('active');
+            if (rssi > -70) bars[2].classList.add('active');
+            if (rssi > -60) bars[3].classList.add('active');
+        }
+
+        function setOnlineStatus(isOnline) {
+            const statusText = document.querySelector('.status');
+            const dot = document.querySelector('.live-dot');
+
+            if (isOnline) {
+                statusText.innerHTML = '<span class="live-dot" style="background-color: #4CAF50;"></span>Online';
+            } else {
+                statusText.innerHTML = '<span class="live-dot" style="background-color: #999;"></span>Offline';
+                setWifiSignal(-100); // Clear signal bars
+            }
+        }
+
+        function updateData() {
+            fetch('/api/status').then(r => r.json()).then(d => {
+                setOnlineStatus(d.online);
+
+                if (d.online) {
+                    document.getElementById('distText').innerText = d.distance.toFixed(1);
+                    document.getElementById('percentText').innerText = d.level.toFixed(1);
+                    document.getElementById('waterLevel').style.height = d.level + '%';
+                    setWifiSignal(d.rssi);
+                    updateClock(d.time);
+                }
+            }).catch(console.error);
+
+            // Fetch History periodically
+            fetch('/api/history').then(r => r.json()).then(h => {
+                if (h.length > 0) {
+                    levelChart.data.labels = h.map(p => p.t);
+                    levelChart.data.datasets[0].data = h.map(p => p.v);
+                    levelChart.update();
+                }
+            }).catch(console.error);
+        }
+
+        // Poll every 5 seconds
+        setInterval(updateData, 5000);
+        updateData();
+    </script>
+</body>
+
+</html>
